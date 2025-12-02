@@ -13,10 +13,9 @@ const CategorySchema = new Schema<ICategory>(
             trim: true
         }
     },
-    { timestamps: true }
+    {
+        timestamps: true
+    }
 );
-
-// Index for fast lookup
-CategorySchema.index({ name: 1 });
 
 export default mongoose.model<ICategory>("Category", CategorySchema);
