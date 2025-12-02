@@ -1,0 +1,77 @@
+# ===========================
+# ENV FILES (SECRETS)
+# ===========================
+.env
+.env.*
+!.env.example
+
+# ===========================
+# NODE MODULES
+# ===========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ===========================
+# TYPE SCRIPT BUILD OUTPUT
+# ===========================
+dist/
+build/
+
+# ===========================
+# LOG FILES
+# ===========================
+*.log
+
+# ===========================
+# OS FILES
+# ===========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===========================
+# IDE SETTINGS
+# ===========================
+.vscode/
+.idea/
+*.swp
+
+# ===========================
+# CACHE / TEMP
+# ===========================
+.cache/
+tmp/
+.temp/
+
+# ===========================
+# COVERAGE / TEST
+# ===========================
+coverage/
+
+# ===========================
+# FRONTEND
+# ===========================
+frontend/node_modules/
+frontend/.env*
+frontend/dist/
+
+# ===========================
+# BACKEND
+# ===========================
+backend/node_modules/
+backend/dist/
+backend/.env*
+backend/*.log
+
+# ===========================
+# DOCKER
+# ===========================
+*.pid
+docker/*.local.yml
+
+# ===========================
+# CLOUDINARY CACHE
+# ===========================
+uploads/
