@@ -8,6 +8,11 @@ export interface IUser extends Document {
     address: string;
     pincode: string;
     role: "user" | "admin";
+
+    cart: {
+        product: mongoose.Types.ObjectId;
+        quantity: number;
+    }[];
 }
 
 const UserSchema = new Schema<IUser>(
@@ -56,7 +61,24 @@ const UserSchema = new Schema<IUser>(
             type: String,
             enum: ["user", "admin"],
             default: "user"
-        }
+        },
+
+        
+        cart: [
+            {
+                product: {
+                    type: Schema.Types.ObjectId,
+                    ref: "Product",
+                    required: true
+                },
+
+                quantity: {
+                    type: Number,
+                    default: 1,
+                    min: 1
+                }
+            }
+        ]
     },
     { timestamps: true }
 );
