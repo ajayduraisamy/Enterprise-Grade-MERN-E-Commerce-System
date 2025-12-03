@@ -12,6 +12,8 @@ import subCategoryRoutes from "./routes/subcategory.routes";
 import productRoutes from "./routes/product.routes";
 import cartRoutes from "./routes/cart.routes";
 import orderRoutes from "./routes/order.routes";
+import paymentRoutes from "./routes/payment.routes";
+import adminRoutes from "./routes/admin.routes";
 
 connectDB();
 
@@ -26,6 +28,9 @@ app.use("/api/subcategories", subCategoryRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/admin", adminRoutes);
+
 
 app.get("/", (req: Request, res: Response) => {
     res.send("MERN E-commerce TypeScript Backend Running");
