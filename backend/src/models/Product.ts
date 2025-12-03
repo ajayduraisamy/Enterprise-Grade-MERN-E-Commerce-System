@@ -1,5 +1,18 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+/* ============================
+   REVIEW TYPE
+============================ */
+export interface IReview {
+    user: mongoose.Types.ObjectId;
+    rating: number;
+    comment: string;
+    createdAt: Date;
+}
+
+/* ============================
+   PRODUCT TYPE
+============================ */
 export interface IProduct extends Document {
     name: string;
     description: string;
@@ -11,8 +24,49 @@ export interface IProduct extends Document {
     stock: number;
     images: string[];
     isActive: boolean;
+
+    reviews: IReview[];
+    averageRating: number;
+    reviewCount: number;
+
+    updateAverageRating(): Promise<void>;
 }
 
+/* ============================
+   REVIEW SCHEMA
+============================ */
+const ReviewSchema = new Schema<IReview>(
+    {
+        user: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
+            required: true
+        },
+
+        rating: {
+            type: Number,
+            required: true,
+            min: 1,
+            max: 5
+        },
+
+        comment: {
+            type: String,
+            required: true,
+            trim: true
+        },
+
+        createdAt: {
+            type: Date,
+            default: Date.now
+        }
+    },
+    { _id: false }
+);
+
+/* ============================
+   PRODUCT SCHEMA
+============================ */
 const ProductSchema = new Schema<IProduct>(
     {
         name: {
@@ -60,14 +114,72 @@ const ProductSchema = new Schema<IProduct>(
         isActive: {
             type: Boolean,
             default: true
+        },
+
+        reviews: [ReviewSchema],
+
+        reviewCount: {
+            type: Number,
+            default: 0
+        },
+
+        averageRating: {
+            type: Number,
+            default: 0
         }
     },
     { timestamps: true }
 );
 
+/* ============================
+   INDEXES
+============================ */
 
 ProductSchema.index({ name: 1 });
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ subCategory: 1 });
+
+/* TEXT SEARCH INDEX */
+ProductSchema.index({
+    name: "text",
+    description: "text"
+});
+
+/* ONE REVIEW PER USER PER PRODUCT */
+ProductSchema.index(
+    { _id: 1, "reviews.user": 1 },
+    { unique: true, sparse: true }
+);
+
+/* ============================
+   METHODS
+============================ */
+
+ProductSchema.methods.updateAverageRating = async function (): Promise<void> {
+    const product = this as IProduct;
+
+    if (!product.reviews || product.reviews.length === 0) {
+        product.reviewCount = 0;
+        product.averageRating = 0;
+        await product.save();
+        return;
+    }
+
+    const total = product.reviews.reduce(
+        (sum, review) => sum + review.rating,
+        0
+    );
+
+    product.reviewCount = product.reviews.length;
+    product.averageRating = Number(
+        (total / product.reviewCount).toFixed(2)
+    );
+
+    await product.save();
+};
+
+/* ============================
+   EXPORT MODEL
+============================ */
 
 export default mongoose.model<IProduct>("Product", ProductSchema);

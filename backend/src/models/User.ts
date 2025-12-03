@@ -9,6 +9,10 @@ export interface IUser extends Document {
     pincode: string;
     role: "user" | "admin";
 
+    isVerified: boolean;       
+    otp?: string;             
+    otpExpiry?: Date;        
+
     cart: {
         product: mongoose.Types.ObjectId;
         quantity: number;
@@ -63,7 +67,23 @@ const UserSchema = new Schema<IUser>(
             default: "user"
         },
 
+    
+
+        isVerified: {
+            type: Boolean,
+            default: false
+        },
+
+        otp: {
+            type: String
+        },
+
+        otpExpiry: {
+            type: Date
+        },
+
         
+
         cart: [
             {
                 product: {

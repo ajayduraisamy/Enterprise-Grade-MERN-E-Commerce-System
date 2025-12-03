@@ -15,6 +15,9 @@ export interface IOrder extends Document {
     paymentMethod: "COD" | "UPI";
     paymentStatus: "PENDING" | "PAID";
 
+    paymentId?: string;   // ✅ NEW
+    paidAt?: Date;        // ✅ NEW
+
     status:
     | "PLACED"
     | "CONFIRMED"
@@ -71,6 +74,15 @@ const OrderSchema = new Schema<IOrder>(
             type: String,
             enum: ["PENDING", "PAID"],
             default: "PENDING"
+        },
+
+        // ✅ PAYMENT TRACKING FIELDS
+        paymentId: {
+            type: String
+        },
+
+        paidAt: {
+            type: Date
         },
 
         status: {

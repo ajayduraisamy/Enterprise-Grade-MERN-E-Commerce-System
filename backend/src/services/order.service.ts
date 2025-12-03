@@ -2,10 +2,10 @@ import Order from "../models/Order";
 import User from "../models/User";
 import Product from "../models/Product";
 import { calculateFinalPrice } from "../utils/price";
-
+import { sendEmail } from "../utils/sendEmail";
 
 // ===================================================
-// CREATE ORDER FROM CART (USER CHECKOUT)
+// CREATE ORDER FROM CART (USER CHECKOUT + EMAIL NOTIFY)
 // ===================================================
 export const createOrderService = async (
     userId: string,
@@ -30,6 +30,7 @@ export const createOrderService = async (
 
     let totalAmount = 0;
     const orderItems: any[] = [];
+    const mailItems: any[] = [];
 
     // Loop through all cart items
     for (const item of user.cart) {
@@ -62,12 +63,18 @@ export const createOrderService = async (
             price: finalPrice
         });
 
+        // Save item for email template
+        mailItems.push({
+            name: product.name,
+            quantity: item.quantity,
+            price: finalPrice
+        });
+
         // Reduce stock
         product.stock -= item.quantity;
         await Product.findByIdAndUpdate(product._id, {
             stock: product.stock
         });
-
     }
 
     // Create new ORDER document
@@ -88,6 +95,54 @@ export const createOrderService = async (
     // Clear CART after successful checkout
     user.cart = [];
     await user.save();
+
+    // =====================================
+    // SEND EMAIL NOTIFICATION
+    // =====================================
+
+    const itemsHTML = mailItems.map(item => `
+        <tr>
+            <td>${item.name}</td>
+            <td>${item.quantity}</td>
+            <td>₹${item.price}</td>
+            <td>₹${item.quantity * item.price}</td>
+        </tr>
+    `).join("");
+
+    const emailTemplate = `
+        <div style="font-family:sans-serif;">
+            <h2>✅ Order Confirmation</h2>
+
+            <p>Hello <b>${user.name}</b>,</p>
+            <p>Your order has been placed successfully!</p>
+
+            <p><b>Order ID:</b> ${order._id}</p>
+            <p><b>Status:</b> ${order.status}</p>
+
+            <table border="1" cellpadding="6" cellspacing="0">
+                <tr>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                </tr>
+                ${itemsHTML}
+            </table>
+
+            <h3>Grand Total: ₹${totalAmount}</h3>
+
+            <p><b>Shipping Address:</b><br/>
+            ${shippingAddress}</p>
+
+            <p>Thanks for shopping with us ❤️</p>
+        </div>
+    `;
+
+    await sendEmail(
+        user.email,
+        "🛒 Your Order Confirmation",
+        emailTemplate
+    );
 
     return order;
 };
@@ -125,5 +180,4 @@ export const updateOrderStatusService = async (
         { status },
         { new: true }
     );
-
 };
