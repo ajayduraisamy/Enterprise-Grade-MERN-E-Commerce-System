@@ -1,9 +1,15 @@
 import Order from "../models/Order";
+import { getCache, setCache } from "../utils/cache";
+
+const ADMIN_DASHBOARD_CACHE_KEY = "admin:dashboard";
+const ADMIN_DASHBOARD_CACHE_TTL = 60 * 2;
 
 /* ================================
    DASHBOARD SUMMARY
 ================================ */
 export const getDashboardStats = async () => {
+    const cached = await getCache<any>(ADMIN_DASHBOARD_CACHE_KEY);
+    if (cached) return cached;
 
     const totalOrders = await Order.countDocuments();
     const totalRevenue = await Order.aggregate([
@@ -26,12 +32,20 @@ export const getDashboardStats = async () => {
         status: "PLACED"
     });
 
-    return {
+    const stats = {
         totalOrders,
         totalRevenue: totalRevenue[0]?.total || 0,
         todayOrders,
         pendingOrders
     };
+
+    await setCache(
+        ADMIN_DASHBOARD_CACHE_KEY,
+        stats,
+        ADMIN_DASHBOARD_CACHE_TTL
+    );
+
+    return stats;
 };
 
 

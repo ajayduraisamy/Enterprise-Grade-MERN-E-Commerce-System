@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import {
     createCategoryService,
     getAllCategoriesService,
@@ -9,7 +10,12 @@ import {
 // CREATE
 export const createCategory = async (req: Request, res: Response) => {
     try {
-        const category = await createCategoryService(req.body.name);
+        const name = String(req.body.name || "").trim();
+        if (!name) {
+            return res.status(400).json({ message: "Category name is required" });
+        }
+
+        const category = await createCategoryService(name);
         res.status(201).json(category);
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -29,9 +35,18 @@ export const getCategories = async (req: Request, res: Response) => {
 // UPDATE
 export const updateCategory = async (req: Request, res: Response) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: "Invalid category id" });
+        }
+
+        const name = String(req.body.name || "").trim();
+        if (!name) {
+            return res.status(400).json({ message: "Category name is required" });
+        }
+
         const category = await updateCategoryService(
             req.params.id,
-            req.body.name
+            name
         );
 
         if (!category)
@@ -46,6 +61,10 @@ export const updateCategory = async (req: Request, res: Response) => {
 // DELETE
 export const deleteCategory = async (req: Request, res: Response) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: "Invalid category id" });
+        }
+
         const result = await deleteCategoryService(req.params.id);
 
         if (!result)

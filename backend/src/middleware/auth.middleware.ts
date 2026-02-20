@@ -12,7 +12,7 @@ export const protect = (
 ) => {
     const header = req.headers.authorization;
 
-    if (!header || !header.startsWith("Bearer")) {
+    if (!header || !header.startsWith("Bearer ")) {
         return res.status(401).json({ message: "No token" });
     }
 
@@ -24,7 +24,7 @@ export const protect = (
             process.env.JWT_SECRET as string
         );
 
-        req.user = decoded;
+        req.user = decoded as any;
         next();
 
     } catch {

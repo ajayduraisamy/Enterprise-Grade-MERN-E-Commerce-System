@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import {
     getAllUsersService,
     getUserByIdService,
@@ -19,6 +20,10 @@ export const getUsers = async (req: Request, res: Response) => {
 // GET USER BY ID
 export const getUser = async (req: Request, res: Response) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: "Invalid user id" });
+        }
+
         const user = await getUserByIdService(req.params.id);
 
         if (!user)
@@ -34,6 +39,14 @@ export const getUser = async (req: Request, res: Response) => {
 export const updateUserRole = async (req: Request, res: Response) => {
     try {
         const { role } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: "Invalid user id" });
+        }
+
+        if (!["user", "admin"].includes(String(role))) {
+            return res.status(400).json({ message: "Invalid role value" });
+        }
 
         const user = await updateUserRoleService(
             req.params.id,
@@ -52,6 +65,10 @@ export const updateUserRole = async (req: Request, res: Response) => {
 // DELETE USER
 export const deleteUser = async (req: Request, res: Response) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: "Invalid user id" });
+        }
+
         const deleted = await deleteUserService(req.params.id);
 
         if (!deleted)

@@ -1,8 +1,12 @@
+import mongoose from "mongoose";
 import Order from "../models/Order";
 import User from "../models/User";
 import Product from "../models/Product";
 import { calculateFinalPrice } from "../utils/price";
 import { sendEmail } from "../utils/sendEmail";
+import { clearCacheByPrefix, deleteCache } from "../utils/cache";
+
+const ADMIN_DASHBOARD_CACHE_KEY = "admin:dashboard";
 
 // ===================================================
 // CREATE ORDER FROM CART (USER CHECKOUT + EMAIL NOTIFY)
@@ -12,141 +16,144 @@ export const createOrderService = async (
     shippingAddress: string,
     paymentMethod: "COD" | "UPI" = "COD"
 ) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Fetch user with populated cart → product + subCategory
-    const user: any = await User.findById(userId).populate({
-        path: "cart.product",
-        populate: {
-            path: "subCategory",
-            select: "offerPercent"
-        }
-    });
+    try {
+        const user: any = await User.findById(userId)
+            .populate({
+                path: "cart.product",
+                populate: {
+                    path: "subCategory",
+                    select: "offerPercent"
+                }
+            })
+            .session(session);
 
-    if (!user)
-        throw new Error("User not found");
+        if (!user) throw new Error("User not found");
+        if (!user.cart || user.cart.length === 0) throw new Error("Cart is empty");
 
-    if (!user.cart || user.cart.length === 0)
-        throw new Error("Cart is empty");
+        let totalAmount = 0;
+        const orderItems: any[] = [];
+        const mailItems: any[] = [];
 
-    let totalAmount = 0;
-    const orderItems: any[] = [];
-    const mailItems: any[] = [];
+        for (const item of user.cart) {
+            const product = item.product;
+            if (!product?._id) throw new Error("Product not found");
 
-    // Loop through all cart items
-    for (const item of user.cart) {
-
-        const product = item.product;
-
-        if (!product)
-            throw new Error("Product not found");
-
-        // Stock check
-        if (product.stock < item.quantity) {
-            throw new Error(
-                `Not enough stock for ${product.name}`
+            const finalPrice = calculateFinalPrice(
+                product.price,
+                product.subCategory?.offerPercent
             );
+
+            const stockUpdated = await Product.findOneAndUpdate(
+                { _id: product._id, stock: { $gte: item.quantity } },
+                { $inc: { stock: -item.quantity } },
+                { new: true, session }
+            );
+
+            if (!stockUpdated) {
+                throw new Error(`Not enough stock for ${product.name}`);
+            }
+
+            totalAmount += finalPrice * item.quantity;
+
+            orderItems.push({
+                product: product._id,
+                quantity: item.quantity,
+                price: finalPrice
+            });
+
+            mailItems.push({
+                name: product.name,
+                quantity: item.quantity,
+                price: finalPrice
+            });
         }
 
-        // Calculate final price after SubCategory offer
-        const finalPrice = calculateFinalPrice(
-            product.price,
-            product.subCategory?.offerPercent
+        const [order] = await Order.create(
+            [
+                {
+                    user: user._id,
+                    items: orderItems,
+                    totalAmount,
+                    shippingAddress,
+                    paymentMethod,
+                    paymentStatus: "PENDING",
+                    status: "PLACED"
+                }
+            ],
+            { session }
         );
 
-        // Sum total order value
-        totalAmount += finalPrice * item.quantity;
+        user.cart = [];
+        await user.save({ session });
 
-        // Add to order items array
-        orderItems.push({
-            product: product._id,
-            quantity: item.quantity,
-            price: finalPrice
-        });
+        await session.commitTransaction();
 
-        // Save item for email template
-        mailItems.push({
-            name: product.name,
-            quantity: item.quantity,
-            price: finalPrice
-        });
+        await Promise.all([
+            deleteCache(ADMIN_DASHBOARD_CACHE_KEY),
+            clearCacheByPrefix("products:list:")
+        ]);
 
-        // Reduce stock
-        product.stock -= item.quantity;
-        await Product.findByIdAndUpdate(product._id, {
-            stock: product.stock
-        });
+        const itemsHTML = mailItems
+            .map(
+                (item) => `
+                    <tr>
+                        <td>${item.name}</td>
+                        <td>${item.quantity}</td>
+                        <td>Rs.${item.price}</td>
+                        <td>Rs.${item.quantity * item.price}</td>
+                    </tr>
+                `
+            )
+            .join("");
+
+        const emailTemplate = `
+            <div style="font-family:sans-serif;">
+                <h2>Order Confirmation</h2>
+
+                <p>Hello <b>${user.name}</b>,</p>
+                <p>Your order has been placed successfully.</p>
+
+                <p><b>Order ID:</b> ${order._id}</p>
+                <p><b>Status:</b> ${order.status}</p>
+
+                <table border="1" cellpadding="6" cellspacing="0">
+                    <tr>
+                        <th>Product</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Total</th>
+                    </tr>
+                    ${itemsHTML}
+                </table>
+
+                <h3>Grand Total: Rs.${totalAmount}</h3>
+
+                <p><b>Shipping Address:</b><br/>
+                ${shippingAddress}</p>
+            </div>
+        `;
+
+        try {
+            await sendEmail(
+                user.email,
+                "Your Order Confirmation",
+                emailTemplate
+            );
+        } catch (err: any) {
+            console.error("ORDER EMAIL ERROR:", err.message);
+        }
+
+        return order;
+    } catch (err) {
+        await session.abortTransaction();
+        throw err;
+    } finally {
+        session.endSession();
     }
-
-    // Create new ORDER document
-    const order = await Order.create({
-        user: user._id,
-        items: orderItems,
-        totalAmount,
-        shippingAddress,
-
-        paymentMethod,
-        paymentStatus: paymentMethod === "COD"
-            ? "PENDING"
-            : "PAID",
-
-        status: "PLACED"
-    });
-
-    // Clear CART after successful checkout
-    user.cart = [];
-    await user.save();
-
-    // =====================================
-    // SEND EMAIL NOTIFICATION
-    // =====================================
-
-    const itemsHTML = mailItems.map(item => `
-        <tr>
-            <td>${item.name}</td>
-            <td>${item.quantity}</td>
-            <td>₹${item.price}</td>
-            <td>₹${item.quantity * item.price}</td>
-        </tr>
-    `).join("");
-
-    const emailTemplate = `
-        <div style="font-family:sans-serif;">
-            <h2>✅ Order Confirmation</h2>
-
-            <p>Hello <b>${user.name}</b>,</p>
-            <p>Your order has been placed successfully!</p>
-
-            <p><b>Order ID:</b> ${order._id}</p>
-            <p><b>Status:</b> ${order.status}</p>
-
-            <table border="1" cellpadding="6" cellspacing="0">
-                <tr>
-                    <th>Product</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                    <th>Total</th>
-                </tr>
-                ${itemsHTML}
-            </table>
-
-            <h3>Grand Total: ₹${totalAmount}</h3>
-
-            <p><b>Shipping Address:</b><br/>
-            ${shippingAddress}</p>
-
-            <p>Thanks for shopping with us ❤️</p>
-        </div>
-    `;
-
-    await sendEmail(
-        user.email,
-        "🛒 Your Order Confirmation",
-        emailTemplate
-    );
-
-    return order;
 };
-
 
 // ===================================================
 // GET ORDERS OF LOGGED-IN USER
@@ -154,13 +161,10 @@ export const createOrderService = async (
 export const getMyOrdersService = async (
     userId: string
 ) => {
-
     return await Order.find({ user: userId })
         .populate("items.product", "name images price")
         .sort({ createdAt: -1 });
-
 };
-
 
 // ===================================================
 // UPDATE ORDER STATUS (ADMIN)
@@ -174,10 +178,13 @@ export const updateOrderStatusService = async (
         | "DELIVERED"
         | "CANCELLED"
 ) => {
-
-    return await Order.findByIdAndUpdate(
+    const order = await Order.findByIdAndUpdate(
         orderId,
         { status },
         { new: true }
     );
+
+    await deleteCache(ADMIN_DASHBOARD_CACHE_KEY);
+
+    return order;
 };

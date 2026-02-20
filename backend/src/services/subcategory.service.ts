@@ -1,20 +1,41 @@
 import SubCategory from "../models/SubCategory";
+import {
+    clearCacheByPrefix,
+    deleteCache,
+    getCache,
+    setCache
+} from "../utils/cache";
+
+const SUBCATEGORY_CACHE_KEY = "subcategories:all";
+const SUBCATEGORY_CACHE_TTL = 60 * 10;
 
 export const createSubCategoryService = async (
     name: string,
     categoryId: string
 ) => {
-    return await SubCategory.create({
+    const subcategory = await SubCategory.create({
         name,
         category: categoryId
     });
+
+    await deleteCache(SUBCATEGORY_CACHE_KEY);
+    await clearCacheByPrefix("products:list:");
+
+    return subcategory;
 };
 
 export const getAllSubCategoriesService = async () => {
-    return await SubCategory
+    const cached = await getCache<any[]>(SUBCATEGORY_CACHE_KEY);
+    if (cached) return cached;
+
+    const subcategories = await SubCategory
         .find()
         .populate("category", "name")
-        .sort({ name: 1 });
+        .sort({ name: 1 })
+        .lean();
+
+    await setCache(SUBCATEGORY_CACHE_KEY, subcategories, SUBCATEGORY_CACHE_TTL);
+    return subcategories;
 };
 
 export const updateSubCategoryService = async (
@@ -22,7 +43,7 @@ export const updateSubCategoryService = async (
     name: string,
     categoryId: string
 ) => {
-    return await SubCategory.findByIdAndUpdate(
+    const subcategory = await SubCategory.findByIdAndUpdate(
         id,
         {
             name,
@@ -30,8 +51,18 @@ export const updateSubCategoryService = async (
         },
         { new: true }
     );
+
+    await deleteCache(SUBCATEGORY_CACHE_KEY);
+    await clearCacheByPrefix("products:list:");
+
+    return subcategory;
 };
 
 export const deleteSubCategoryService = async (id: string) => {
-    return await SubCategory.findByIdAndDelete(id);
+    const deleted = await SubCategory.findByIdAndDelete(id);
+
+    await deleteCache(SUBCATEGORY_CACHE_KEY);
+    await clearCacheByPrefix("products:list:");
+
+    return deleted;
 };

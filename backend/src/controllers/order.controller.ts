@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 
 import {
     createOrderService,
@@ -15,15 +16,21 @@ export const placeOrder = async (req: any, res: Response) => {
     try {
         const { shippingAddress, paymentMethod } = req.body;
 
-        if (!shippingAddress) {
+        if (!shippingAddress || !String(shippingAddress).trim()) {
             return res.status(400).json({
                 message: "Shipping address is required"
             });
         }
 
+        if (paymentMethod && !["COD", "UPI"].includes(paymentMethod)) {
+            return res.status(400).json({
+                message: "Invalid payment method"
+            });
+        }
+
         const order = await createOrderService(
             req.user.id,
-            shippingAddress,
+            String(shippingAddress).trim(),
             paymentMethod || "COD"
         );
 
@@ -31,7 +38,16 @@ export const placeOrder = async (req: any, res: Response) => {
 
     } catch (err: any) {
         console.error("Order error:", err.message);
-        res.status(500).json({ error: err.message });
+
+        if (
+            err.message === "User not found" ||
+            err.message === "Cart is empty" ||
+            err.message.startsWith("Not enough stock")
+        ) {
+            return res.status(400).json({ error: err.message });
+        }
+
+        return res.status(500).json({ error: err.message });
     }
 };
 
@@ -63,6 +79,12 @@ export const updateOrderStatus = async (
     try {
         const { status } = req.body;
         const { orderId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(orderId)) {
+            return res.status(400).json({
+                message: "Invalid order id"
+            });
+        }
 
         const allowedStatus = [
             "PLACED",

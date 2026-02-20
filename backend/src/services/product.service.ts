@@ -1,17 +1,40 @@
 import Product from "../models/Product";
 import { calculateFinalPrice } from "../utils/price";
+import { clearCacheByPrefix, getCache, setCache } from "../utils/cache";
+
+const PRODUCT_LIST_CACHE_TTL = 60 * 5;
+
+const buildProductListCacheKey = (params: any): string => {
+    const entries = [
+        ["page", String(params.page ?? 1)],
+        ["limit", String(params.limit ?? 12)],
+        ["search", String(params.search ?? "")],
+        ["category", String(params.category ?? "")],
+        ["subCategory", String(params.subCategory ?? "")],
+        ["minPrice", String(params.minPrice ?? "")],
+        ["maxPrice", String(params.maxPrice ?? "")],
+        ["sort", String(params.sort ?? "")]
+    ];
+
+    return `products:list:${new URLSearchParams(entries).toString()}`;
+};
 
 /* ===========================
    CREATE
 =========================== */
 export const createProductService = async (data: any) => {
-    return await Product.create(data);
+    const product = await Product.create(data);
+    await clearCacheByPrefix("products:list:");
+    return product;
 };
 
 /* ===========================
    READ - PAGINATED + FILTERED
 =========================== */
 export const getProductsService = async (params: any) => {
+    const cacheKey = buildProductListCacheKey(params);
+    const cached = await getCache<any>(cacheKey);
+    if (cached) return cached;
 
     const {
         page = 1,
@@ -71,7 +94,7 @@ export const getProductsService = async (params: any) => {
 
     const total = await Product.countDocuments(filter);
 
-    return {
+    const response = {
         products: finalProducts,
         pagination: {
             page: Number(page),
@@ -80,18 +103,25 @@ export const getProductsService = async (params: any) => {
             totalPages: Math.ceil(total / Number(limit))
         }
     };
+
+    await setCache(cacheKey, response, PRODUCT_LIST_CACHE_TTL);
+    return response;
 };
 
 /* ===========================
    UPDATE
 =========================== */
 export const updateProductService = async (id: string, data: any) => {
-    return await Product.findByIdAndUpdate(id, data, { new: true });
+    const product = await Product.findByIdAndUpdate(id, data, { new: true });
+    await clearCacheByPrefix("products:list:");
+    return product;
 };
 
 /* ===========================
    DELETE
 =========================== */
 export const deleteProductService = async (id: string) => {
-    return await Product.findByIdAndDelete(id);
+    const deleted = await Product.findByIdAndDelete(id);
+    await clearCacheByPrefix("products:list:");
+    return deleted;
 };
