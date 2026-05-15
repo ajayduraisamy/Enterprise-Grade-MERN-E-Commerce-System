@@ -1,201 +1,222 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import SearchBar from "./SearchBar";
-import { FiMenu, FiX, FiUser, FiShoppingCart, FiSearch, FiHeart, FiChevronDown } from "react-icons/fi";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuthStore } from "../store/authStore";
+import { useCartStore } from "../store/cartStore";
+import { useUIStore } from "../store/uiStore";
+import { useDebounce } from "../hooks/useDebounce";
+import { categoryApi, productApi } from "../api";
+import type { ICategory } from "../types";
+import { FiMenu, FiX, FiUser, FiShoppingCart, FiSearch, FiHeart, FiChevronDown, FiMoon, FiSun, FiLogOut, FiGrid, FiPackage, FiSettings } from "react-icons/fi";
 import { HiOutlineShoppingBag } from "react-icons/hi";
 
 export default function Navbar() {
+    const navigate = useNavigate();
+    const { user, isAuthenticated, isAdmin, logout } = useAuthStore();
+    const { cartCount } = useCartStore();
+    const { theme, toggleTheme, setCartDrawerOpen } = useUIStore();
+
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [suggestions, setSuggestions] = useState<{ _id: string; name: string }[]>([]);
+    const [categories, setCategories] = useState<ICategory[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+
+    const debouncedSearch = useDebounce(searchQuery, 300);
+
+    useEffect(() => {
+        categoryApi.getAll().then((res) => setCategories(res.data)).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        if (debouncedSearch.length < 2) {
+            setSuggestions([]);
+            return;
+        }
+        productApi.getAll({ search: debouncedSearch, limit: 5 }).then((res) => {
+            setSuggestions(res.data.products.map((p: any) => ({ _id: p._id, name: p.name })));
+        }).catch(() => {});
+    }, [debouncedSearch]);
+
+    const handleSearch = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (searchQuery.trim()) {
+            navigate(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
+            setSearchQuery("");
+            setShowSuggestions(false);
+        }
+    };
+
+    const selectSuggestion = (id: string) => {
+        navigate(`/product/${id}`);
+        setSearchQuery("");
+        setShowSuggestions(false);
+    };
 
     return (
-        <nav className="bg-white shadow-lg sticky top-0 z-50 border-b border-gray-100">
-            
+        <nav className="bg-white dark:bg-gray-900 shadow-lg sticky top-0 z-50 border-b border-gray-100 dark:border-gray-800">
+            <div className="container mx-auto px-4 py-3">
+                <div className="flex items-center justify-between gap-4">
 
-            {/* Main Navigation */}
-            <div className="container mx-auto px-4 py-4">
-                <div className="flex items-center justify-between">
+                    {/* Logo */}
+                    <Link to="/" className="flex items-center space-x-2 group shrink-0">
+                        <div className="relative">
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl blur-sm opacity-20 group-hover:opacity-30 transition-opacity" />
+                            <HiOutlineShoppingBag className="relative w-8 h-8 text-blue-600 dark:text-blue-400 group-hover:text-purple-600 transition-all group-hover:scale-110" />
+                        </div>
+                        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                            LuxeCart
+                        </h1>
+                    </Link>
 
-                    {/* Logo & Brand - More premium */}
-                    <div className="flex items-center space-x-3">
-                        <Link to="/" className="flex items-center space-x-3 group">
-                            <div className="relative">
-                                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl blur-sm opacity-20 group-hover:opacity-30 transition-opacity duration-300"></div>
-                                <HiOutlineShoppingBag className="relative w-10 h-10 text-blue-600 group-hover:text-purple-600 transition-all duration-300 transform group-hover:scale-110" />
-                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-amber-400 to-amber-500 rounded-full animate-pulse"></div>
+                    {/* Desktop Search */}
+                    <form onSubmit={handleSearch} className="hidden lg:flex flex-1 max-w-xl relative">
+                        <div className="relative w-full">
+                            <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                            <input
+                                value={searchQuery}
+                                onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+                                onFocus={() => setShowSuggestions(true)}
+                                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                placeholder="Search products..."
+                                className="w-full pl-12 pr-4 py-2.5 rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 transition outline-none dark:text-white"
+                            />
+                        </div>
+                        {showSuggestions && suggestions.length > 0 && (
+                            <div className="absolute top-full mt-2 left-0 right-0 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50">
+                                {suggestions.map((s) => (
+                                    <button key={s._id} type="button" onMouseDown={() => selectSuggestion(s._id)} className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm dark:text-white">
+                                        {s.name}
+                                    </button>
+                                ))}
                             </div>
-                            <div className="flex flex-col">
-                                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                                    LuxeCart
-                                </h1>
-                                
-                            </div>
+                        )}
+                    </form>
+
+                    {/* Desktop Nav Links */}
+                    <div className="hidden lg:flex items-center space-x-1">
+                        <Link to="/" className="px-3 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                            Home
+                        </Link>
+                        <div className="relative">
+                            <button onClick={() => setIsCategoryOpen(!isCategoryOpen)} className="flex items-center px-3 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-blue-600 transition rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                                Categories <FiChevronDown className={`ml-1 w-4 h-4 transition-transform ${isCategoryOpen ? "rotate-180" : ""}`} />
+                            </button>
+                        </div>
+                        <Link to="/shop" className="px-3 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-blue-600 transition rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                            Shop
                         </Link>
                     </div>
 
-                    {/* Desktop Navigation Links */}
-                    <div className="hidden lg:flex items-center space-x-8">
-                        <div className="flex items-center space-x-8 text-sm font-semibold">
-                            <Link
-                                to="/"
-                                className="relative text-gray-700 hover:text-blue-600 transition-colors duration-300 group px-2 py-1"
-                            >
-                                <span className="flex items-center">
-                                    Home
-                                    <span className="ml-1 text-xs text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
-                                </span>
-                                <span className="absolute -bottom-2 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:w-full transition-all duration-300 rounded-full"></span>
-                            </Link>
+                    {/* Desktop Actions */}
+                    <div className="hidden lg:flex items-center space-x-2">
+                        <button onClick={toggleTheme} className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-600 dark:text-gray-400">
+                            {theme === "dark" ? <FiSun className="w-5 h-5" /> : <FiMoon className="w-5 h-5" />}
+                        </button>
 
-                            <div className="relative">
-                                <button
-                                    onClick={() => setIsCategoryOpen(!isCategoryOpen)}
-                                    className="flex items-center text-gray-700 hover:text-blue-600 transition-colors duration-300 group px-2 py-1"
-                                >
-                                    <span className="font-semibold">Categories</span>
-                                    <FiChevronDown className={`ml-1 w-4 h-4 transition-transform duration-300 ${isCategoryOpen ? 'rotate-180' : ''}`} />
-                                    <span className="absolute -bottom-2 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:w-full transition-all duration-300 rounded-full"></span>
-                                </button>
-                            </div>
-
-                        
-                            <Link
-                                to="/new-arrivals"
-                                className="relative px-3 py-1.5 rounded-full bg-gradient-to-r from-pink-50 to-rose-50 text-pink-600 hover:from-pink-100 hover:to-rose-100 transition-all duration-300 group"
-                            >
-                                <span className="flex items-center font-semibold text-sm">
-                                    New Arrivals
-                                    <span className="ml-2 w-2 h-2 bg-pink-500 rounded-full animate-ping opacity-75"></span>
-                                </span>
-                            </Link>
-
-                            
-                        </div>
-                    </div>
-
-                    {/* Desktop Search & Actions */}
-                    <div className="hidden lg:flex items-center space-x-6">
-                        {/* Desktop Search */}
-                        <div className="w-80">
-                            <SearchBar
-                                value=""
-                                onChange={() => { }}
-                                className="rounded-full border-gray-200 bg-gray-50 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all duration-300"
-                                placeholder="Search for  products..."
-                            />
-                        </div>
-
-                        {/* Action Icons */}
-                        <div className="flex items-center space-x-4">
-                            
-                            <Link
-                                to="/cart"
-                                className="p-2.5 rounded-full hover:bg-blue-50 transition-colors duration-300 group relative"
-                            >
-                                <FiShoppingCart className="w-5 h-5 text-gray-600 group-hover:text-blue-600 transition-colors" />
+                        <button onClick={() => setCartDrawerOpen(true)} className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition relative group">
+                            <FiShoppingCart className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-blue-600 transition-colors" />
+                            {cartCount > 0 && (
                                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs rounded-full flex items-center justify-center font-bold shadow-lg">
-                                    3
+                                    {cartCount > 99 ? "99+" : cartCount}
                                 </span>
-                            </Link>
+                            )}
+                        </button>
 
-                            <Link
-                                to="/login"
-                                className="flex items-center space-x-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg"
-                            >
-                                <FiUser className="w-4 h-4" />
-                                <span className="text-sm">Sign In</span>
+                        {isAuthenticated ? (
+                            <div className="relative">
+                                <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} className="flex items-center space-x-2 px-3 py-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
+                                        {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                                    </div>
+                                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 hidden xl:block">{user?.name?.split(" ")[0]}</span>
+                                </button>
+                                {isUserMenuOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-10" onClick={() => setIsUserMenuOpen(false)} />
+                                        <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-20">
+                                            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                                                <p className="text-sm font-semibold dark:text-white">{user?.name}</p>
+                                                <p className="text-xs text-gray-500">{user?.email}</p>
+                                            </div>
+                                            <Link to="/dashboard" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition dark:text-gray-300">
+                                                <FiGrid className="w-4 h-4" /> Dashboard
+                                            </Link>
+                                            <Link to="/dashboard/orders" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition dark:text-gray-300">
+                                                <FiPackage className="w-4 h-4" /> Orders
+                                            </Link>
+                                            {isAdmin && (
+                                                <Link to="/admin" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition text-purple-600 font-semibold">
+                                                    <FiSettings className="w-4 h-4" /> Admin Panel
+                                                </Link>
+                                            )}
+                                            <div className="border-t border-gray-100 dark:border-gray-700">
+                                                <button onClick={() => { setIsUserMenuOpen(false); logout(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition w-full">
+                                                    <FiLogOut className="w-4 h-4" /> Sign Out
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        ) : (
+                            <Link to="/login" className="flex items-center space-x-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold transition shadow-md hover:shadow-lg text-sm">
+                                <FiUser className="w-4 h-4" /> <span>Sign In</span>
                             </Link>
-                        </div>
+                        )}
                     </div>
 
                     {/* Mobile Controls */}
-                    <div className="flex lg:hidden items-center space-x-3">
-                        {/* Mobile Search Toggle */}
-                        <button
-                            onClick={() => setIsSearchOpen(!isSearchOpen)}
-                            className="p-2.5 rounded-full bg-gray-50 hover:bg-gray-100 transition-colors duration-300"
-                        >
-                            <FiSearch className="w-5 h-5 text-gray-600" />
+                    <div className="flex lg:hidden items-center space-x-2">
+                        <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+                            {theme === "dark" ? <FiSun className="w-5 h-5 text-gray-600 dark:text-gray-400" /> : <FiMoon className="w-5 h-5 text-gray-600" />}
                         </button>
-
-                        {/* Cart Icon for Mobile */}
-                        <Link
-                            to="/cart"
-                            className="p-2.5 rounded-full bg-gray-50 hover:bg-gray-100 transition-colors duration-300 relative"
-                        >
-                            <FiShoppingCart className="w-5 h-5 text-gray-600" />
-                            <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                                3
-                            </span>
-                        </Link>
-
-                        {/* Mobile Menu Toggle */}
-                        <button
-                            onClick={() => setIsMenuOpen(!isMenuOpen)}
-                            className="p-2.5 rounded-full bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 transition-all duration-300 border border-gray-200"
-                        >
-                            {isMenuOpen ? (
-                                <FiX className="w-6 h-6 text-gray-700" />
-                            ) : (
-                                <FiMenu className="w-6 h-6 text-gray-700" />
-                            )}
+                        <button onClick={() => setCartDrawerOpen(true)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition relative">
+                            <FiShoppingCart className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                            {cartCount > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center font-bold">{cartCount}</span>}
+                        </button>
+                        <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+                            {isMenuOpen ? <FiX className="w-6 h-6 text-gray-700 dark:text-gray-300" /> : <FiMenu className="w-6 h-6 text-gray-700 dark:text-gray-300" />}
                         </button>
                     </div>
                 </div>
 
-                {/* Mobile Search - Slides down */}
+                {/* Mobile Search */}
                 {isSearchOpen && (
-                    <div className="lg:hidden mt-4 animate-slideDown">
-                        <SearchBar
-                            value=""
-                            onChange={() => { }}
-                            className="w-full rounded-full border-gray-200 bg-gray-50 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all duration-300 shadow-sm"
-                            placeholder="Search products..."
-                            autoFocus
-                        />
+                    <div className="lg:hidden mt-3">
+                        <form onSubmit={handleSearch}>
+                            <div className="relative">
+                                <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search products..." className="w-full pl-12 pr-4 py-2.5 rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 outline-none dark:text-white" autoFocus />
+                            </div>
+                        </form>
                     </div>
                 )}
+
+                {/* Mobile Search Toggle */}
+                <div className="lg:hidden mt-3">
+                    <button onClick={() => setIsSearchOpen(!isSearchOpen)} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-full border border-gray-200 dark:border-gray-600 text-gray-400 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+                        <FiSearch className="w-5 h-5" /> Search products...
+                    </button>
+                </div>
             </div>
 
             {/* Categories Dropdown */}
             {isCategoryOpen && (
-                <div className="hidden lg:block absolute top-full left-0 right-0 bg-white border-t border-gray-100 shadow-xl animate-slideDown z-40">
+                <div className="hidden lg:block absolute top-full left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 shadow-xl z-40">
                     <div className="container mx-auto px-4 py-6">
-                        <div className="grid grid-cols-4 gap-8">
-                            <div className="space-y-3">
-                                <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wider mb-3">Men's Fashion</h3>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Premium Watches</a>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Designer Apparel</a>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Footwear</a>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Accessories</a>
-                            </div>
-                            <div className="space-y-3">
-                                <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wider mb-3">Women's Fashion</h3>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Luxury Bags</a>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Jewelry</a>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Cosmetics</a>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Evening Wear</a>
-                            </div>
-                            <div className="space-y-3">
-                                <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wider mb-3">Electronics</h3>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Audio Gear</a>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Smart Home</a>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Gadgets</a>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Wearables</a>
-                            </div>
-                            <div className="space-y-3">
-                                <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wider mb-3">Featured</h3>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Limited Edition</a>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Summer Collection</a>
-                                <a href="#" className="block text-gray-600 hover:text-blue-600 transition-colors">Best Sellers</a>
-                                <div className="pt-4 mt-4 border-t border-gray-100">
-                                    <Link to="/sale" className="inline-flex items-center text-pink-600 font-semibold hover:text-pink-700">
-                                        Sale Up to 50% Off
-                                        <span className="ml-2 text-xs">🔥</span>
-                                    </Link>
-                                </div>
-                            </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            {categories.slice(0, 8).map((cat) => (
+                                <Link key={cat._id} to={`/shop?category=${cat._id}`} onClick={() => setIsCategoryOpen(false)}
+                                    className="block p-4 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition group">
+                                    <h3 className="font-bold text-gray-800 dark:text-white group-hover:text-blue-600 transition">{cat.name}</h3>
+                                </Link>
+                            ))}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-center">
+                            <Link to="/categories" onClick={() => setIsCategoryOpen(false)} className="text-blue-600 font-semibold hover:underline">View All Categories →</Link>
                         </div>
                     </div>
                 </div>
@@ -203,138 +224,78 @@ export default function Navbar() {
 
             {/* Mobile Menu */}
             {isMenuOpen && (
-                <div className="lg:hidden fixed inset-0 top-[86px] bg-white z-40 animate-slideDown overflow-y-auto">
-                    <div className="container mx-auto px-4 py-6">
-                        <div className="space-y-6">
-                            {/* User Info */}
-                            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-purple-50 border border-gray-100">
+                <div className="lg:hidden fixed inset-0 top-16 bg-white dark:bg-gray-900 z-40 overflow-y-auto">
+                    <div className="container mx-auto px-4 py-6 space-y-4">
+                        {isAuthenticated ? (
+                            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-800 border border-gray-100 dark:border-gray-700">
                                 <div className="flex items-center space-x-3">
-                                    <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">
-                                        GS
+                                    <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                                        {user?.name?.charAt(0)?.toUpperCase() || "U"}
                                     </div>
                                     <div>
-                                        <p className="font-semibold text-gray-800">Welcome Guest!</p>
-                                        <p className="text-sm text-gray-600">Sign in for personalized experience</p>
+                                        <p className="font-semibold text-gray-800 dark:text-white">{user?.name}</p>
+                                        <p className="text-sm text-gray-500">{user?.email}</p>
                                     </div>
                                 </div>
                             </div>
+                        ) : (
+                            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-800 border border-gray-100 dark:border-gray-700">
+                                <p className="font-semibold text-gray-800 dark:text-white">Welcome Guest!</p>
+                                <p className="text-sm text-gray-500">Sign in for personalized experience</p>
+                            </div>
+                        )}
 
-                            {/* Mobile Navigation Links */}
-                            <div className="space-y-2">
-                                <Link
-                                    to="/"
-                                    className="flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition-colors duration-300 group"
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-2 h-2 rounded-full bg-blue-500 group-hover:scale-150 transition-transform"></div>
-                                        <span className="font-semibold text-gray-800">Home</span>
+                        <div className="space-y-1">
+                            <MobileNavLink to="/" icon={FiGrid} label="Home" onClick={() => setIsMenuOpen(false)} />
+                            <MobileNavLink to="/shop" icon={FiPackage} label="Shop All" onClick={() => setIsMenuOpen(false)} />
+                            <MobileNavLink to="/categories" icon={FiGrid} label="Categories" onClick={() => setIsMenuOpen(false)} />
+                            <MobileNavLink to="/dashboard/wishlist" icon={FiHeart} label="Wishlist" onClick={() => setIsMenuOpen(false)} />
+                        </div>
+
+                        {isAuthenticated && (
+                            <>
+                                <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Account</p>
+                                    <div className="space-y-1">
+                                        <MobileNavLink to="/dashboard" icon={FiGrid} label="Dashboard" onClick={() => setIsMenuOpen(false)} />
+                                        <MobileNavLink to="/dashboard/orders" icon={FiPackage} label="Orders" onClick={() => setIsMenuOpen(false)} />
+                                        <MobileNavLink to="/dashboard/profile" icon={FiUser} label="Profile" onClick={() => setIsMenuOpen(false)} />
+                                        {isAdmin && <MobileNavLink to="/admin" icon={FiSettings} label="Admin Panel" onClick={() => setIsMenuOpen(false)} />}
                                     </div>
-                                    <span className="text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+                                </div>
+                                <button onClick={() => { setIsMenuOpen(false); logout(); }} className="flex items-center gap-3 w-full p-4 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition font-semibold">
+                                    <FiLogOut className="w-5 h-5" /> Sign Out
+                                </button>
+                            </>
+                        )}
+
+                        {!isAuthenticated && (
+                            <div className="pt-4 space-y-3">
+                                <Link to="/login" onClick={() => setIsMenuOpen(false)} className="block w-full py-3.5 text-center rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold transition shadow-md">
+                                    Sign In
                                 </Link>
-
-                                <Link
-                                    to="/shop"
-                                    className="flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition-colors duration-300 group"
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-2 h-2 rounded-full bg-purple-500 group-hover:scale-150 transition-transform"></div>
-                                        <span className="font-semibold text-gray-800">Shop All</span>
-                                    </div>
-                                    <span className="text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
-                                </Link>
-
-                                <Link
-                                    to="/new-arrivals"
-                                    className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-pink-50 to-rose-50 hover:from-pink-100 hover:to-rose-100 transition-colors duration-300 group"
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-2 h-2 rounded-full bg-pink-500 group-hover:scale-150 transition-transform animate-pulse"></div>
-                                        <span className="font-semibold text-pink-600">New Arrivals</span>
-                                    </div>
-                                    <span className="text-pink-400">🔥</span>
-                                </Link>
-
-                                <Link
-                                    to="/categories"
-                                    className="flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition-colors duration-300 group"
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-2 h-2 rounded-full bg-indigo-500 group-hover:scale-150 transition-transform"></div>
-                                        <span className="font-semibold text-gray-800">Categories</span>
-                                    </div>
-                                    <span className="text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
-                                </Link>
-
-                                <Link
-                                    to="/contact"
-                                    className="flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition-colors duration-300 group"
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-2 h-2 rounded-full bg-green-500 group-hover:scale-150 transition-transform"></div>
-                                        <span className="font-semibold text-gray-800">Contact Us</span>
-                                    </div>
-                                    <span className="text-green-400 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+                                <Link to="/register" onClick={() => setIsMenuOpen(false)} className="block w-full py-3 text-center rounded-xl border-2 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold transition">
+                                    Create Account
                                 </Link>
                             </div>
+                        )}
 
-                            {/* Quick Actions */}
-                            <div className="grid grid-cols-2 gap-3 pt-4">
-                                <Link
-                                    to="/wishlist"
-                                    className="p-4 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 transition-all duration-300 text-center"
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <FiHeart className="w-6 h-6 text-pink-500 mx-auto mb-2" />
-                                    <span className="font-semibold text-gray-800">Wishlist</span>
-                                    <span className="block text-xs text-pink-600 font-bold">2 items</span>
-                                </Link>
-
-                                <Link
-                                    to="/cart"
-                                    className="p-4 rounded-xl bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 transition-all duration-300 text-center"
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <FiShoppingCart className="w-6 h-6 text-blue-600 mx-auto mb-2" />
-                                    <span className="font-semibold text-gray-800">Cart</span>
-                                    <span className="block text-xs text-blue-600 font-bold">3 items</span>
-                                </Link>
-                            </div>
-
-                            {/* Account Actions */}
-                            <div className="pt-4 border-t border-gray-100 space-y-3">
-                                <Link
-                                    to="/login"
-                                    className="block w-full py-3.5 text-center rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold transition-all duration-300 shadow-md hover:shadow-lg"
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    Sign In / Register
-                                </Link>
-
-                                <Link
-                                    to="/account"
-                                    className="block w-full py-3 text-center rounded-xl border-2 border-gray-200 hover:border-blue-400 text-gray-700 font-semibold transition-all duration-300"
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    My Account
-                                </Link>
-                            </div>
-
-                            {/* Contact Info */}
-                            <div className="pt-4 border-t border-gray-100">
-                                <p className="text-center text-gray-500 text-sm">
-                                    Need help?
-                                    <a href="tel:+18005551234" className="text-blue-600 font-semibold ml-1">1-800-555-1234</a>
-                                </p>
-                            </div>
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <p className="text-center text-gray-500 text-sm">Need help? <span className="text-blue-600 font-semibold">support@luxecart.com</span></p>
                         </div>
                     </div>
                 </div>
             )}
         </nav>
+    );
+}
+
+function MobileNavLink({ to, icon: Icon, label, onClick }: { to: string; icon: any; label: string; onClick: () => void }) {
+    return (
+        <Link to={to} onClick={onClick}
+            className="flex items-center gap-3 p-4 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition group">
+            <Icon className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition" />
+            <span className="font-semibold text-gray-800 dark:text-gray-200">{label}</span>
+        </Link>
     );
 }

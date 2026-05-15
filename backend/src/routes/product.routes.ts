@@ -9,6 +9,7 @@ import {
 
 import { protect } from "../middleware/auth.middleware";
 import { adminOnly } from "../middleware/role.middleware";
+import { uploadProductImages } from "../middleware/upload.middleware";
 
 const router = express.Router();
 
@@ -16,8 +17,8 @@ const router = express.Router();
 router.get("/", getProducts);
 
 // ADMIN
-router.post("/", protect, adminOnly, createProduct);
-router.put("/:id", protect, adminOnly, updateProduct);
+router.post("/", protect, adminOnly, uploadProductImages, createProduct);
+router.put("/:id", protect, adminOnly, uploadProductImages, updateProduct);
 router.delete("/:id", protect, adminOnly, deleteProduct);
 
 export default router;

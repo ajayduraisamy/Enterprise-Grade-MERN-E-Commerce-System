@@ -4,10 +4,12 @@ import mongoose, { Schema, Document } from "mongoose";
    REVIEW TYPE
 ============================ */
 export interface IReview {
+    _id?: mongoose.Types.ObjectId;
     user: mongoose.Types.ObjectId;
     rating: number;
     comment: string;
     createdAt: Date;
+    helpful: mongoose.Types.ObjectId[];
 }
 
 /* ============================
@@ -59,9 +61,15 @@ const ReviewSchema = new Schema<IReview>(
         createdAt: {
             type: Date,
             default: Date.now
-        }
-    },
-    { _id: false }
+        },
+
+        helpful: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: "User"
+            }
+        ]
+    }
 );
 
 /* ============================

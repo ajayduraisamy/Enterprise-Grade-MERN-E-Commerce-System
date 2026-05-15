@@ -180,3 +180,109 @@ export const login = async (req: Request, res: Response) => {
         return res.status(500).json({ error: "Internal server error" });
     }
 };
+
+/* ============================
+   FORGOT PASSWORD
+============================ */
+
+export const forgotPassword = async (req: Request, res: Response) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ message: "Email is required" });
+        }
+
+        const normalizedEmail = String(email).trim().toLowerCase();
+        if (!isValidEmail(normalizedEmail)) {
+            return res.status(400).json({ message: "Invalid email format" });
+        }
+
+        const user = await User.findOne({ email: normalizedEmail });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (!user.isVerified) {
+            return res.status(403).json({
+                message: "Please verify your email before resetting password"
+            });
+        }
+
+        const otp = generateOtp();
+        user.otp = otp;
+        user.otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+        await user.save();
+
+        await sendEmail(
+            normalizedEmail,
+            "Password Reset - OTP",
+            `
+                <div style="font-family:sans-serif">
+                    <h2>Password Reset Request</h2>
+                    <p>Your OTP for password reset is:</p>
+                    <h1 style="color:#0d6efd;">${otp}</h1>
+                    <p>OTP valid for 5 minutes</p>
+                </div>
+            `
+        );
+
+        return res.json({ message: "OTP has been sent to your email" });
+    } catch (err: any) {
+        console.error("FORGOT PASSWORD ERROR:", err.message);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/* ============================
+   RESET PASSWORD
+============================ */
+
+export const resetPassword = async (req: Request, res: Response) => {
+    try {
+        const { email, otp, password } = req.body;
+
+        if (!email || !otp || !password) {
+            return res.status(400).json({
+                message: "Email, OTP and new password are required"
+            });
+        }
+
+        if (String(password).length < 6) {
+            return res.status(400).json({
+                message: "Password must be at least 6 characters"
+            });
+        }
+
+        const normalizedEmail = String(email).trim().toLowerCase();
+        if (!isValidEmail(normalizedEmail)) {
+            return res.status(400).json({ message: "Invalid email format" });
+        }
+
+        if (!/^\d{6}$/.test(String(otp))) {
+            return res.status(400).json({ message: "Invalid OTP format" });
+        }
+
+        const user = await User.findOne({ email: normalizedEmail });
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        if (user.otp !== String(otp)) {
+            return res.status(400).json({ message: "Invalid OTP" });
+        }
+
+        if (!user.otpExpiry || user.otpExpiry < new Date()) {
+            return res.status(400).json({ message: "OTP expired" });
+        }
+
+        const hashed = await bcrypt.hash(password, 10);
+        user.password = hashed;
+        user.otp = undefined;
+        user.otpExpiry = undefined;
+        await user.save();
+
+        return res.json({ message: "Password reset successfully" });
+    } catch (err: any) {
+        console.error("RESET PASSWORD ERROR:", err.message);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};

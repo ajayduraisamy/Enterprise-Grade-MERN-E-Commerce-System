@@ -17,6 +17,7 @@ export interface IUser extends Document {
         product: mongoose.Types.ObjectId;
         quantity: number;
     }[];
+    wishlist: mongoose.Types.ObjectId[];
 }
 
 const UserSchema = new Schema<IUser>(
@@ -97,6 +98,13 @@ const UserSchema = new Schema<IUser>(
                     default: 1,
                     min: 1
                 }
+            }
+        ],
+
+        wishlist: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: "Product"
             }
         ]
     },

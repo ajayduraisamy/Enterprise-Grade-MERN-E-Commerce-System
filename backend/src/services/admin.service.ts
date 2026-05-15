@@ -1,4 +1,4 @@
-import Order from "../models/Order";
+import Order, { IOrder } from "../models/Order";
 import { getCache, setCache } from "../utils/cache";
 
 const ADMIN_DASHBOARD_CACHE_KEY = "admin:dashboard";
@@ -70,7 +70,7 @@ export const getOrdersByStatusService = async (
 ) => {
 
     return await Order
-        .find({ status })
+        .find({ status: status as IOrder["status"] })
         .populate("user", "name email")
         .populate("items.product", "name images price")
         .sort({ createdAt: -1 });
